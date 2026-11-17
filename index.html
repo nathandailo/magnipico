@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Magnipico · Image upscaler</title>
+  <meta name="description" content="Make small images big. Free image upscaling that runs entirely on your own device.">
+  <meta name="theme-color" content="#f5f4f9">
+  <script>
+    (function () {
+      var t = null;
+      try { t = JSON.parse(localStorage.getItem('magnipico.theme')); } catch (e) {}
+      if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="" width="28" height="28">
+      <span class="wordmark">Magnipico</span>
+      <span class="brand-tag">Image upscaler. Runs on your device, nothing is uploaded.</span>
+    </div>
+    <div class="topbar-actions">
+      <span id="engineBadge" class="engine" title="Where the upscaling runs">Checking…</span>
+      <button id="installBtn" class="btn quiet" hidden>Install</button>
+      <button id="tourBtn" class="btn quiet">Tour</button>
+      <button id="themeBtn" class="btn quiet icon" aria-label="Switch between light and dark" title="Light / dark">
+        <svg class="i-moon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.2A8.5 8.5 0 1 1 9.8 3.5a7 7 0 0 0 10.7 10.7z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.400 1.400M17.3 17.3l1.400 1.400M5.3 18.7l1.400-1.400M17.3 6.7l1.400-1.400"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel queue" id="queuePanel">
+      <div class="panel-head">
+        <h2>Images</h2>
+        <div class="queue-actions">
+          <button id="addBtn2" class="btn small">Add</button>
+          <button id="clearBtn" class="btn small">Clear</button>
+          <button id="saveAllBtn" class="btn small" disabled>Save all</button>
+        </div>
+      </div>
+      <div id="dropHint" class="drop-hint">
+        <p class="drop-desktop">Drop images here, paste from the clipboard, or</p>
+        <button id="addBtn" class="btn">Choose images</button>
+      </div>
+      <ul id="queue" class="queue-list"></ul>
+      <input id="fileInput" type="file" accept="image/*" multiple hidden>
+    </section>
+
+    <section class="stage">
+      <div class="stage-bar">
+        <span id="info" class="info"></span>
+        <span class="hint">Scroll to zoom, drag to pan, double-click to fit</span>
+      </div>
+      <div id="viewWrap" class="view-wrap">
+        <canvas id="view"></canvas>
+        <div id="emptyState" class="empty-state">
+          <img src="icons/icon.svg" alt="" width="72" height="72">
+          <h1>Make small images big</h1>
+          <p>Add a photo to get started. It stays on your device the whole time.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel settings" id="settingsPanel">
+      <div class="group" id="modelGroup">
+        <label class="label" for="model">Model</label>
+        <select id="model"></select>
+        <p id="modelDesc" class="desc"></p>
+      </div>
+
+      <div class="group" id="scaleGroup">
+        <span class="label">Scale</span>
+        <div id="scale" class="segmented" role="radiogroup" aria-label="Scale"></div>
+      </div>
+
+      <div class="group" id="lookGroup">
+        <span class="label">Look</span>
+        <div class="slider-row">
+          <label for="strength">Strength</label>
+          <input id="strength" type="range" min="0" max="100" step="5">
+          <output id="strengthOut"></output>
+        </div>
+        <div class="slider-row">
+          <label for="sharpen">Sharpen</label>
+          <input id="sharpen" type="range" min="0" max="100" step="5">
+          <output id="sharpenOut"></output>
+        </div>
+        <div class="slider-row">
+          <label for="grain">Grain</label>
+          <input id="grain" type="range" min="0" max="100" step="5">
+          <output id="grainOut"></output>
+        </div>
+        <p class="desc">Result too smooth? Lower the strength a little and add some grain.</p>
+      </div>
+
+      <div class="group" id="outputGroup">
+        <div class="field-row">
+          <div>
+            <label class="label" for="format">Save as</label>
+            <select id="format">
+              <option value="image/png">PNG</option>
+              <option value="image/jpeg">JPEG</option>
+              <option value="image/webp">WebP</option>
+            </select>
+          </div>
+          <div>
+            <label class="label" for="backend">Run on</label>
+            <select id="backend">
+              <option value="auto">GPU (auto)</option>
+              <option value="cpu">CPU (slow)</option>
+            </select>
+          </div>
+        </div>
+        <label class="check"><input id="tourOnStart" type="checkbox"> Show the tour at startup</label>
+      </div>
+
+      <div class="actions" id="actions">
+        <div class="action-row">
+          <button id="previewBtn" class="btn" title="Upscale only the area in the middle of the view, to check your settings">Preview area</button>
+          <button id="runBtn" class="btn">Upscale this</button>
+        </div>
+        <button id="runAllBtn" class="btn primary">Upscale all</button>
+        <button id="cancelBtn" class="btn" disabled>Cancel</button>
+        <div class="progress"><div id="bar"></div></div>
+        <p id="status" class="status">Ready</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="dropOverlay" class="drop-overlay" hidden><div>Drop to add</div></div>
+
+  <div id="tour" class="tour" hidden>
+    <div id="tourSpot" class="tour-spot"></div>
+    <div id="tourCard" class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+      <div id="tourStep" class="tour-step"></div>
+      <h3 id="tourTitle"></h3>
+      <p id="tourText"></p>
+      <label class="check"><input id="tourAgain" type="checkbox"> Show this at startup</label>
+      <div class="tour-nav">
+        <button id="tourSkip" class="btn quiet small">Skip</button>
+        <span class="grow"></span>
+        <button id="tourBack" class="btn small">Back</button>
+        <button id="tourNext" class="btn primary small">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
