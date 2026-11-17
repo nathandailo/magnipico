@@ -529,19 +529,31 @@ async function runPreview() {
 // ------------------------------------------------------------------ onboarding tour
 const TOUR = [
   { title: 'Welcome to Magnipico', text: 'Make small images bigger and sharper. Everything happens on your own device, so your images are never uploaded. This takes about 30 seconds.' },
-  { el: 'queuePanel', title: 'Add your images', text: 'Choose images, drop them anywhere in the window, or paste one from the clipboard. Add as many as you like.' },
-  { el: 'modelGroup', title: 'Pick a model', text: 'Sharp photo suits most photos. Try Web photo for blurry or compressed pictures, Art & anime for drawings, and Fast when you are in a hurry.' },
+  { el: 'queuePanel', title: 'Add your images',
+    text: 'Choose images, drop them anywhere in the window, or paste one from the clipboard. Add as many as you like.',
+    phone: 'Tap Choose images to pick photos from your phone. Add as many as you like.' },
+  { el: 'modelGroup', title: 'Pick a model',
+    text: 'Sharp photo suits most photos. Try Web photo for blurry or compressed pictures, Art & anime for drawings, and Fast when you are in a hurry.',
+    phone: 'Fast is the quickest on a phone. Sharp photo keeps the most detail, Web photo fixes blurry or compressed pictures, and Art & anime is for drawings.' },
   { el: 'scaleGroup', title: 'Choose how big', text: 'From 2x up to 8x. The new size is shown above the image.' },
   { el: 'lookGroup', title: 'Tune the look', text: 'If a result looks too smooth, lower the strength and add a little grain. Sharpen adds extra bite.' },
-  { el: 'previewBtn', title: 'Preview before you commit', text: 'Zoom into the part you care about and press this. Only that area is upscaled, so you can check your settings in seconds.' },
-  { el: 'viewWrap', title: 'Compare before and after', text: 'Drag the line left and right. Zoom with the scroll wheel or a pinch, drag to move around, double-click to fit.' },
-  { el: 'runAllBtn', title: 'Upscale and save', text: 'Press this to process every image, then save them from the list. The first run downloads the model once; after that Magnipico works offline.' },
+  { el: 'previewBtn', title: 'Preview before you commit',
+    text: 'Zoom into the part you care about and press this. Only that area is upscaled, so you can check your settings in seconds.',
+    phone: 'Pinch to zoom into the part you care about, then tap this. Only that area is upscaled, so you can check your settings in seconds.' },
+  { el: 'viewWrap', title: 'Compare before and after',
+    text: 'Drag the line left and right. Zoom with the scroll wheel or a pinch, drag to move around, double-click to fit.',
+    phone: 'Drag the white line to compare. Pinch to zoom and drag to move around.' },
+  { el: 'runAllBtn', title: 'Upscale and save',
+    text: 'Press this to process your images. When they are done, Magnipico asks you to save them. The first run downloads the model once; after that it works offline.',
+    phone: 'Tap this to process your images. When they are done, you are asked to save them to your phone. The first run downloads the model once.' },
 ];
+const isNarrow = () => window.innerWidth <= 860;
 const tour = {
   i: 0, open: false,
   start() {
     this.i = 0; this.open = true;
     $('tourAgain').checked = store.get('tour', null) === 'on';
+    document.documentElement.classList.toggle('touring', isNarrow());
     $('tour').hidden = false;
     this.show();
     $('tourNext').focus({ preventScroll: true });
@@ -549,44 +561,62 @@ const tour = {
   close() {
     this.open = false;
     $('tour').hidden = true;
+    document.documentElement.classList.remove('touring');
     const on = $('tourAgain').checked;
     store.set('tour', on ? 'on' : 'off');
     $('tourOnStart').checked = on;
-    window.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0, behavior: 'instant' });
   },
   show() {
     const step = TOUR[this.i];
+    const narrow = isNarrow();
     $('tourStep').textContent = `${this.i + 1} / ${TOUR.length}`;
     $('tourTitle').textContent = step.title;
-    $('tourText').textContent = step.text;
+    $('tourText').textContent = (narrow && step.phone) || step.text;
     $('tourBack').hidden = this.i === 0;
     $('tourNext').textContent = this.i === TOUR.length - 1 ? 'Done' : 'Next';
-    if (step.el) $(step.el).scrollIntoView({ block: window.innerWidth <= 860 ? 'center' : 'nearest' });
+    if (step.el) {
+      const el = $(step.el);
+      if (!narrow) el.scrollIntoView({ block: 'nearest' });
+      else if (el.closest('.actions')) window.scrollTo({ top: 0, behavior: 'instant' }); // the action bar is pinned to the bottom
+      else { // bring the section up to just under the header; the card sits below it
+        const header = document.querySelector('.topbar').getBoundingClientRect().bottom;
+        window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - header - 10), behavior: 'instant' });
+      }
+    } else if (narrow) window.scrollTo({ top: 0, behavior: 'instant' });
     this.place();
   },
   place() {
     if (!this.open) return;
     const step = TOUR[this.i];
     const spot = $('tourSpot'), card = $('tourCard');
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const narrow = vw <= 860;
+    const vv = window.visualViewport;
+    const vw = window.innerWidth, vh = vv ? vv.height : window.innerHeight;
+    const narrow = isNarrow();
     card.style.width = narrow ? vw - 16 + 'px' : '';
     const cw = card.offsetWidth, chh = card.offsetHeight;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const setSpot = (l, t, r, b) => Object.assign(spot.style, { left: l + 'px', top: t + 'px', width: Math.max(0, r - l) + 'px', height: Math.max(0, b - t) + 'px' });
     if (!step.el) {
-      Object.assign(spot.style, { left: vw / 2 + 'px', top: vh / 2 + 'px', width: '0px', height: '0px' });
-      Object.assign(card.style, { left: (vw - cw) / 2 + 'px', top: (vh - chh) / 2 + 'px' });
+      setSpot(vw / 2, vh / 2, vw / 2, vh / 2);
+      Object.assign(card.style, { left: (vw - cw) / 2 + 'px', top: Math.max(8, (vh - chh) / 2) + 'px' });
       return;
     }
-    const r = $(step.el).getBoundingClientRect();
-    const p = narrow ? 3 : 6;
-    const sl = Math.max(2, r.left - p), st = Math.max(2, r.top - p);
-    Object.assign(spot.style, { left: sl + 'px', top: st + 'px', width: Math.min(vw - 2, r.right + p) - sl + 'px', height: Math.min(vh - 2, r.bottom + p) - st + 'px' });
-    if (narrow) { // dock the card to whichever edge is further from the highlighted element
-      const below = vh - r.bottom, above = r.top;
-      Object.assign(card.style, { left: '8px', top: (below >= above ? vh - chh - 8 : 8) + 'px' });
+    const el = $(step.el);
+    const r = el.getBoundingClientRect();
+    if (narrow) {
+      const header = document.querySelector('.topbar').getBoundingClientRect().bottom;
+      const inBar = !!el.closest('.actions');
+      // card docked at the bottom, or at the top when the target is in the pinned bottom bar
+      const cardTop = inBar ? header + 8 : vh - chh - 8;
+      Object.assign(card.style, { left: '8px', top: cardTop + 'px' });
+      const bandTop = inBar ? cardTop + chh + 8 : header + 2;
+      const bandBottom = inBar ? vh - 2 : cardTop - 8;
+      setSpot(Math.max(3, r.left - 4), clamp(r.top - 4, bandTop, bandBottom), Math.min(vw - 3, r.right + 4), clamp(r.bottom + 4, bandTop, bandBottom));
       return;
     }
+    const p = 6;
+    setSpot(Math.max(2, r.left - p), Math.max(2, r.top - p), Math.min(vw - 2, r.right + p), Math.min(vh - 2, r.bottom + p));
     const gap = 16;
     let x, y;
     if (r.right + gap + cw <= vw - 8) { x = r.right + gap; y = r.top; }
@@ -606,7 +636,13 @@ const tour = {
     const box = $('tourOnStart');
     box.checked = store.get('tour', null) === 'on';
     box.onchange = () => store.set('tour', box.checked ? 'on' : 'off');
-    window.addEventListener('resize', () => this.place());
+    // stop finger scrolling under the tour (iOS ignores overflow: hidden), and keep the highlight on target
+    $('tour').addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    $('tour').addEventListener('wheel', (e) => { if (isNarrow()) e.preventDefault(); }, { passive: false });
+    const refit = () => { if (this.open) { document.documentElement.classList.toggle('touring', isNarrow()); this.place(); } };
+    window.addEventListener('resize', refit);
+    window.addEventListener('scroll', () => this.place(), { passive: true });
+    window.visualViewport?.addEventListener('resize', refit);
     document.addEventListener('keydown', (e) => {
       if (!this.open) return;
       if (e.key === 'Escape') this.close();
@@ -614,7 +650,7 @@ const tour = {
       else if (e.key === 'ArrowLeft') this.back();
     });
     const pref = store.get('tour', null);
-    if (pref === null || pref === 'on') this.start();
+    if (pref === null || pref === 'on') requestAnimationFrame(() => this.start());
   },
 };
 
