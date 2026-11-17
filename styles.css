@@ -143,6 +143,8 @@ input[type=range] { width: 100%; margin: 0; }
 
 .actions { margin-top: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
 .action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn.save { border: 1.5px solid var(--accent); color: var(--accent); background: transparent; font-weight: 700; }
+.btn.save:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .btn.primary { padding-top: 10px; padding-bottom: 10px; }
 .progress { height: 7px; border-radius: 99px; background: var(--raised); overflow: hidden; margin-top: 4px; }
 #bar { height: 100%; width: 0; border-radius: 99px; background: var(--grad); transition: width .15s; }
