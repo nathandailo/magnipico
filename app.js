@@ -282,16 +282,16 @@ const toFile = (it) => new File([it.result.blob], outName(it), { type: it.result
 const useShareSheet = matchMedia('(pointer: coarse)').matches;
 
 // Phones: hand the files to the system share sheet, which offers "Save Image", "Save to Photos" and Files.
-// Returns true if the share sheet handled it (or the user closed it), false if sharing isn't available.
+// Browsers only allow this straight after a tap, so it is always started from a button.
+// Returns 'shared', 'cancelled' (user closed the sheet) or false (sharing not available or failed).
 async function shareFiles(files) {
   if (!useShareSheet || !navigator.canShare) return false;
   try {
     if (!navigator.canShare({ files })) return false;
     await navigator.share({ files });
-    setStatus(files.length > 1 ? `Shared ${files.length} images.` : 'Saved or shared.');
-    return true;
+    return 'shared';
   } catch (e) {
-    if (e.name === 'AbortError') return true; // user closed the sheet
+    if (e.name === 'AbortError') return 'cancelled';
     console.warn('Share failed, falling back to download', e);
     return false;
   }
@@ -309,37 +309,101 @@ function downloadLink(it) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
-async function download(it) {
-  if (!it?.result) return;
-  if (await shareFiles([toFile(it)])) return;
-  downloadLink(it);
-  setStatus(`Saved ${outName(it)} to your downloads.`);
-}
-
-async function saveAll() {
-  const done = state.items.filter((i) => i.result);
-  if (!done.length) return;
-  if (await shareFiles(done.map(toFile))) return;
-  if (useShareSheet) { // phones block several downloads in a row; save one per tap instead
-    setStatus('Your browser can only save one image at a time. Use Save next to each image.');
-    downloadLink(done[0]);
-    return;
+/** Save finished items. Returns 'saved', 'cancelled', or 'fallback' (a download was attempted on a phone,
+ *  which may or may not have worked, so the caller should offer press-and-hold as a backup). */
+async function saveItems(items) {
+  items = items.filter((i) => i && i.result);
+  if (!items.length) return 'cancelled';
+  const n = items.length;
+  const shared = await shareFiles(items.map(toFile));
+  if (shared === 'shared') { setStatus(n > 1 ? `Saved ${n} images.` : `Saved ${outName(items[0])}.`); return 'saved'; }
+  if (shared === 'cancelled') return 'cancelled';
+  if (useShareSheet) { // phones without a share sheet block several downloads in a row
+    downloadLink(items[0]);
+    setStatus(n > 1 ? 'This browser can only save one image at a time.' : `Downloading ${outName(items[0])}…`);
+    return 'fallback';
   }
+  if (n === 1) { downloadLink(items[0]); setStatus(`Saved ${outName(items[0])} to your downloads.`); return 'saved'; }
   if (window.showDirectoryPicker) {
     try {
       const dir = await window.showDirectoryPicker({ mode: 'readwrite' });
-      for (const it of done) {
+      for (const it of items) {
         const fh = await dir.getFileHandle(outName(it), { create: true });
         const ws = await fh.createWritable();
         await ws.write(it.result.blob);
         await ws.close();
       }
-      setStatus(`Saved ${done.length} image(s) to “${dir.name}”.`);
-    } catch (e) { if (e.name !== 'AbortError') setStatus('Could not save: ' + e.message); }
-    return;
+      setStatus(`Saved ${n} images to “${dir.name}”.`);
+      return 'saved';
+    } catch (e) {
+      if (e.name === 'AbortError') return 'cancelled';
+      setStatus('Could not save to that folder, downloading instead.');
+    }
   }
-  for (const it of done) { downloadLink(it); await new Promise((r) => setTimeout(r, 400)); }
+  for (const it of items) { downloadLink(it); await new Promise((r) => setTimeout(r, 400)); }
+  setStatus(`Saved ${n} images to your downloads.`);
+  return 'saved';
 }
+
+const download = (it) => saveItems([it]);
+const saveAll = () => saveItems(state.items);
+
+// "Your image is ready" prompt, shown when an upscale finishes. Its Save button provides the tap that
+// phones require before opening the share sheet, and the full-size image can be pressed and held to save.
+const ready = {
+  items: [], urls: [],
+  open(items) {
+    if (!items.length) return;
+    this.clear();
+    this.items = items;
+    const n = items.length, first = items[0];
+    $('readyTitle').textContent = n > 1 ? `${n} images are ready` : 'Your image is ready';
+    $('readyInfo').textContent = n > 1
+      ? `Upscaled ${first.result.scale}x · ${fmtSize(items.reduce((t, i) => t + i.result.blob.size, 0))} in total`
+      : `${first.result.w} × ${first.result.h} · ${fmtSize(first.result.blob.size)}`;
+    const box = $('readyImgs');
+    box.classList.toggle('many', n > 1);
+    for (const it of items) {
+      const url = URL.createObjectURL(it.result.blob);
+      this.urls.push(url);
+      const img = new Image();
+      img.src = url; img.alt = outName(it); img.title = outName(it);
+      box.append(img);
+    }
+    $('readySave').textContent = n > 1 ? `Save all ${n}` : 'Save image';
+    $('readySave').disabled = false;
+    const hint = $('readyHint');
+    hint.hidden = true;
+    hint.textContent = n > 1
+      ? 'Didn’t work? Press and hold each image above, then choose Save to Photos or Download image.'
+      : 'Didn’t work? Press and hold the image above, then choose Save to Photos or Download image.';
+    $('ready').hidden = false;
+    $('readySave').focus({ preventScroll: true });
+  },
+  clear() {
+    for (const u of this.urls) URL.revokeObjectURL(u);
+    this.urls = [];
+    $('readyImgs').replaceChildren();
+  },
+  close() {
+    $('ready').hidden = true;
+    this.clear();
+    this.items = [];
+  },
+  async save() {
+    $('readySave').disabled = true;
+    const r = await saveItems(this.items);
+    $('readySave').disabled = false;
+    if (r === 'saved') this.close();
+    else if (r === 'fallback') $('readyHint').hidden = false;
+  },
+  init() {
+    $('readySave').onclick = () => this.save();
+    $('readyClose').onclick = () => this.close();
+    $('ready').addEventListener('click', (e) => { if (e.target === $('ready')) this.close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('ready').hidden) this.close(); });
+  },
+};
 
 // ------------------------------------------------------------------ engine
 const worker = new Worker('worker.js', { type: 'module' });
@@ -394,6 +458,7 @@ async function runItems(items) {
   updateButtons();
   const t0 = performance.now();
   let ok = 0, fail = 0, cancelled = false;
+  const finished = [];
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     statusPrefix = items.length > 1 ? `Image ${i + 1} of ${items.length}: ` : '';
@@ -410,6 +475,7 @@ async function runItems(items) {
       it.result = { blob: m.blob, bitmap: m.bitmap, w: m.width, h: m.height, scale };
       it.error = null;
       ok++;
+      finished.push(it);
       if (state.current === it) await select(it); else renderQueue();
     } catch (e) {
       if (e.cancelled) { cancelled = true; break; }
@@ -424,7 +490,8 @@ async function runItems(items) {
   const secs = (performance.now() - t0) / 1000;
   if (cancelled) { setBar(0); setStatus('Cancelled.'); }
   else if (fail) { setStatus(`${ok} done, ${fail} failed: ${items.find((i) => i.error)?.error || ''}`); }
-  else { setBar(1); setStatus(`Done in ${fmtTime(secs)}. Press Save image to keep it.`); }
+  else { setBar(1); setStatus(`Done in ${fmtTime(secs)}.`); }
+  if (!cancelled && finished.length) ready.open(finished);
 }
 
 async function runPreview() {
@@ -614,6 +681,7 @@ function initPwa() {
 }
 
 initTheme();
+ready.init();
 view.init();
 initSettings();
 initInputs();
@@ -623,4 +691,4 @@ tour.init();
 worker.postMessage({ type: 'probe' });
 
 // small hook for automated checks
-window.__magnipico = { state, view, addFiles, runItems, runPreview, tour, settings };
+window.__magnipico = { state, view, addFiles, runItems, runPreview, tour, settings, ready };

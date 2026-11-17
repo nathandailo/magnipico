@@ -153,6 +153,25 @@ input[type=range] { width: 100%; margin: 0; }
 .drop-overlay { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 86%, transparent); display: flex; align-items: center; justify-content: center; z-index: 50; pointer-events: none; }
 .drop-overlay div { border: 2px dashed var(--accent); border-radius: 18px; padding: 38px 66px; font-size: 22px; font-weight: 700; }
 
+/* ---------- image ready prompt */
+.ready { position: fixed; inset: 0; z-index: 90; background: rgba(10, 9, 14, .6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.ready-card {
+  width: 420px; max-width: 100%; max-height: 100%; overflow-y: auto; background: var(--surface);
+  border: 1px solid var(--line-strong); border-radius: 16px; padding: 20px;
+  display: flex; flex-direction: column; gap: 10px; box-shadow: 0 18px 50px rgba(0, 0, 0, .35);
+}
+.ready-card h3 { font-size: 20px; font-weight: 800; letter-spacing: -0.015em; }
+.ready-card .desc { margin-top: -6px; }
+.ready-imgs { display: flex; gap: 8px; overflow-x: auto; justify-content: center; }
+.ready-imgs img {
+  display: block; max-width: 100%; max-height: 36vh; max-height: 36dvh; object-fit: contain;
+  border-radius: 10px; background: var(--stage); -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto;
+}
+.ready-imgs.many { justify-content: flex-start; }
+.ready-imgs.many img { height: 120px; width: auto; max-width: none; flex: none; }
+.ready-card .btn.primary { padding-top: 12px; padding-bottom: 12px; font-size: 15px; }
+.ready-hint { font-size: 13px; background: var(--raised); border-radius: 10px; padding: 10px 12px; }
+
 /* ---------- tour */
 .tour { position: fixed; inset: 0; z-index: 100; }
 .tour-spot { position: absolute; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(10, 9, 14, .68); outline: 2px solid var(--accent); transition: all .2s ease; pointer-events: none; }
@@ -194,6 +213,8 @@ input[type=range] { width: 100%; margin: 0; }
   }
   .actions #cancelBtn:disabled { display: none; }
   .status { min-height: 1.45em; }
+  .ready { align-items: flex-end; padding: 8px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .ready-card { width: 100%; }
   .tour-card { width: auto; transition: none; }
   .tour-spot { transition: none; }
 }

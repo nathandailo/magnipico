@@ -139,6 +139,17 @@
 
   <div id="dropOverlay" class="drop-overlay" hidden><div>Drop to add</div></div>
 
+  <div id="ready" class="ready" hidden>
+    <div class="ready-card" role="dialog" aria-modal="true" aria-labelledby="readyTitle">
+      <h3 id="readyTitle"></h3>
+      <p id="readyInfo" class="desc"></p>
+      <div id="readyImgs" class="ready-imgs"></div>
+      <button id="readySave" class="btn primary">Save image</button>
+      <p id="readyHint" class="ready-hint" hidden></p>
+      <button id="readyClose" class="btn quiet">Not now</button>
+    </div>
+  </div>
+
   <div id="tour" class="tour" hidden>
     <div id="tourSpot" class="tour-spot"></div>
     <div id="tourCard" class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
